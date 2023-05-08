@@ -1,71 +1,104 @@
-import debounce from 'lodash.debounce';
+import SimpleLightbox from 'simplelightbox';
+import 'simplelightbox/dist/simple-lightbox.min.css';
+import { getGallery, totalPages } from './js/api';
+import { scroll } from './js/scroll';
+import { createGalleryItem } from './js/createMarkup';
 import Notiflix from 'notiflix';
-import { fetchCountries } from './fetchCountries';
-import './css/styles.css';
 
-const DEBOUNCE_DELAY = 300;
+const form = document.querySelector('#search-form');
+const gallery = document.querySelector('.gallery');
+// const btnLoad = document.querySelector('.load-more');
+const guard = document.querySelector('.guard');
+let query = '';
+let page = 1;
+const lightbox = new SimpleLightbox('.gallery a');
+const options = {
+  root: null,
+  rootMargin: '100px',
+  threshold: 0,
+};
 
-const input = document.querySelector('#search-box');
-const container = document.querySelector('.country-info');
-const list = document.querySelector('.country-list');
+const observer = new IntersectionObserver(onPagination, options);
 
-const onInput = debounce(evt => {
-  const name = evt.target.value.trim();
-  if (!name) {
-    container.innerHTML = '';
-    list.innerHTML = '';
-    return;
+form.addEventListener('change', onInput);
+form.addEventListener('submit', onSubmit);
+// btnLoad.addEventListener('click', onClick);
+
+async function addGallerySubmit() {
+  try {
+    const response = await getGallery(query, page);
+    addImages(response);
+    if (page !== totalPages) {
+      observer.observe(guard);
+    }
+  } catch (error) {
+    console.error(error);
   }
-  fetchCountries(name)
-    .then(choiceCountry)
-    .catch(error => console.log(error));
-}, DEBOUNCE_DELAY);
+}
 
-function choiceCountry(countries) {
-  const arrLength = countries.length;
-  if (arrLength > 10) {
-    Notiflix.Notify.info(
-      'Too many matches found. Please enter a more specific name.'
+async function addGalleryPag() {
+  try {
+    scroll();
+    const response = await getGallery(query, page);
+    const images = response.data.hits;
+    createGalleryItem(images);
+    lightbox.refresh();
+
+    if (page > totalPages) {
+      Notiflix.Notify.warning(
+        "We're sorry, but you've reached the end of search results."
+      );
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function onInput(evt) {
+  query = evt.target.value.trim();
+  return query;
+}
+
+function onSubmit(evt) {
+  evt.preventDefault();
+  page = 1;
+  gallery.innerHTML = '';
+
+  if (!evt.target.elements.searchQuery.value) {
+    Notiflix.Notify.failure('Please, enter a search query');
+  } else {
+    addGallerySubmit();
+  }
+}
+
+function addImages(response) {
+  const images = response.data.hits;
+
+  if (!images.length) {
+    gallery.innerHTML = '';
+    Notiflix.Notify.failure(
+      'Sorry, there are no images matching your search query. Please try again.'
     );
-    container.innerHTML = '';
-    list.innerHTML = '';
-    return;
-  }
-  if (arrLength === 1) {
-    list.innerHTML = '';
-    return renderCountryInfo(countries);
-  }
-  if (arrLength > 1) {
-    container.innerHTML = '';
-    return renderCountriesAll(countries);
+  } else {
+    createGalleryItem(images);
+    Notiflix.Notify.success(
+      `Hooray! We found ${response.data.totalHits} images.`
+    );
+    lightbox.refresh();
   }
 }
 
-function renderCountryInfo(countries) {
-  const markup = countries
-    .map(country => {
-      return `<div class="country">
-      <img src="${country.flags.svg}" width="50" height="30" alt="flag of ${
-        country.name.official
-      }">
-      <h2 class="country-title">${country.name.official}</h2></div>
-            <p><b>Capital</b>: ${country.capital}</p>
-            <p><b>Population</b>: ${country.population}</p>
-            <p><b>Languages</b>: ${Object.values(country.languages)}</p>`;
-    })
-    .join('');
-  container.innerHTML = markup;
+function onPagination(entries, observer) {
+  entries.forEach(entry => {
+    console.log(entry);
+    if (entry.isIntersecting) {
+      page += 1;
+      addGalleryPag();
+      if (page === totalPages) {
+        observer.unobserve(guard);
+      }
+    }
+  });
 }
 
-function renderCountriesAll(countries) {
-  const markup = countries
-    .map(country => {
-      return `<li class="country">
-      <img src="${country.flags.svg}" width="50" height="30" alt="flag of ${country.name.official}">
-      <p>${country.name.official}</p></li>`;
-    })
-    .join('');
-  list.innerHTML = markup;
-}
-
-input.addEventListener('input', onInput);
+export { gallery };
