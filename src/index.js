@@ -15,7 +15,7 @@ const lightbox = new SimpleLightbox('.gallery a');
 const options = {
   root: null,
   rootMargin: '100px',
-  threshold: 0,
+  threshold: 1.0,
 };
 
 const observer = new IntersectionObserver(onPagination, options);
@@ -66,9 +66,10 @@ function onSubmit(evt) {
 
   if (!evt.target.elements.searchQuery.value) {
     Notiflix.Notify.failure('Please, enter a search query');
-  } else {
-    addGallerySubmit();
+    return;
   }
+  observer.unobserve(guard);
+  addGallerySubmit();
 }
 
 function addImages(response) {
